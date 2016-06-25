@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
 
   spec.summary       = "fine"
   spec.description   = "ok."
-  spec.homepage      = "http://surefine"
+  spec.homepage      = "http://github.com/micahscopes/metamorphic"
   spec.license       = "MIT"
 
   # Prevent pushing this gem to RubyGems.org by setting 'allowed_push_host', or
@@ -29,6 +29,8 @@ Gem::Specification.new do |spec|
 
   spec.add_development_dependency "bundler", "~> 1.9"
   spec.add_development_dependency "rake", "~> 10.0"
-  spec.add_development_dependency "rspec", "~> 3.3.0"
-  spec.add_dependency "oga"
+  # spec.add_development_dependency "rspec", "~> 3.3.0"
+  spec.add_dependency "rake"
+  # spec.add_dependency "rake/hooks"
+  spec.add_dependency "knit"
 end
