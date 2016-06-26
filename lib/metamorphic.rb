@@ -1,4 +1,5 @@
 require "metamorphic/version"
+require "yaml/store"
 require "rake"
 require "rake/clean"
 
@@ -50,32 +51,40 @@ module Metamorphic
     class << self; alias :move :paths; end
     class << self; alias :transplant :paths; end
 
-    def from(sources,&blk)
+    def from(sources=nil,&blk)
       # this method does all the heavy lifting
       pre = @pathmapper ? @@path_filter : @pre
       post = @pathmapper ? @@path_filter : @post
       # puts [@i,@o].inspect
       # puts sources.inspect
       # puts pre.inspect
-      sources = pre[sources]
       witheach = @pathmapper ? lambda{|src| @@pathmap[@i][@o][@witheach[src]]} : @witheach
       # puts sources.inspect
       # puts "()()()()"
-      sources.select!(&@filter) if @filter
-      results = []
-      sources.each do |src|
-        if blk
-          results << yield(src,witheach[src])
-        else
-          results << witheach[src]
+      exe = lambda do |sources|
+        sources = pre[sources]
+        sources.select!(&@filter) if @filter
+        results = []
+        sources.each do |src|
+          if blk
+            results << yield(src,witheach[src])
+          else
+            results << witheach[src]
+          end
         end
+        return post[results]
       end
-      return post[results]
+      if sources
+        return exe[sources]
+      else
+        return lambda{|*s| exe[s]}
+      end
     end
     alias :with :from
+    alias :as :from
 
-    def then(&blk)
-      return Morph.new {|src| yield(from(src))}
+    def then(&witheach)
+      return Morph.new{|src| witheach[@witheach[src]]}
     end
 
         # def meta!(src,opts={:type => :yaml},&blk)
