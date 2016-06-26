@@ -10,7 +10,7 @@ module Metamorphic
       @filter = nil
       @blk = blk
       if @blk == nil
-        @blk = lambda{|path| path.pathmap("%{^#{@i}*,#{@o}}d/%f")}
+        @blk = lambda{|path| path.pathmap("%{^*#{@i},#{@o}}p")}
       end
     end
 
@@ -50,7 +50,9 @@ module Metamorphic
     end
 
     def filter(&blk)
-      return self.clone.instance_eval { @filter = blk }
+      nu = self.clone
+      nu.instance_eval { @filter = blk }
+      return nu
     end
 
     def self.filter(&blk)
@@ -83,10 +85,27 @@ module Metamorphic
   YAMLFM = /(\A---\n(?<yaml>(.|\n|\r)*?)\n---\n)*(?<content>(.|\n|\r)+)/
   def clobberDirectory(dir,&blk)
     # creates a disposable directory (if directory doesn't exist already)
-    directory dir
+    if dir.is_a? Hash
+      dep = dir.values[0]
+      dir = dir.keys[0]
+    end
+
+    dir.chomp!("/")
+    dir+="/"
+
+    if dep
+      directory dir => dep
+    else
+      directory dir
+    end
+
+    parent = File.dirname(dir)+"/"
+    if parent != "./"
+      directory dir => parent
+    end
     directory dir do
-      cmd = "echo ''>> #{dir+".clobberthis"}"
-      sh cmd; puts cmd
+      cmd = "echo ''>> #{dir}.clobberthis"
+      sh cmd; #puts cmd
       CLOBBER.include dir
     end
     if blk
