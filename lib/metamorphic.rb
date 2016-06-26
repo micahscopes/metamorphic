@@ -21,6 +21,7 @@ module Metamorphic
     def self.transplant(i,o)
       return Morph.new(i,o)
     end
+    class << self; alias :move :transplant; end
 
     def from(src,&blk)
       sources = FileList[src]
@@ -49,37 +50,52 @@ module Metamorphic
     end
 
     def filter(&blk)
-      nu = self.clone
-      nu.instance_eval { @filter = blk }
-      return nu
+      return self.clone.instance_eval { @filter = blk }
     end
 
     def self.filter(&blk)
       return Morph.new.filter!(&blk)
     end
 
-    def select_ext!(exts)
+    def by_ext!(exts)
       exts = [exts].flatten
       return filter!{|p| exts.include? p.pathmap("%x")}
     end
 
-    def self.select_ext(exts)
-      return Morph.new.select_ext!(exts)
+    def by_ext(exts)
+      return self.clone.by_ext!(exts)
+    end
+
+    def self.by_ext(exts)
+      return Morph.new.by_ext!(exts)
+    end
+  end
+
+  def meta(path,&blk)
+    store = YAML::Store.new(path)
+    if blk
+      return store.transaction(&blk)
+    else
+      return lambda {|key| store.transaction{|d| d[key]}}
     end
   end
 
   YAMLFM = /(\A---\n(?<yaml>(.|\n|\r)*?)\n---\n)*(?<content>(.|\n|\r)+)/
-  def clobberDirectory(dir)
-    # creates a disposable directory if directory doesn't exist
-    directory dir # initialize a basic directory task
-    directory dir do # modify it to create .clobberthis file for new directory
+  def clobberDirectory(dir,&blk)
+    # creates a disposable directory (if directory doesn't exist already)
+    directory dir
+    directory dir do
       cmd = "echo ''>> #{dir+".clobberthis"}"
       sh cmd; puts cmd
       CLOBBER.include dir
     end
+    if blk
+      directory(dir,&blk)
+    end
   end
 
   def self.included(base)
+    # check for existing clobberable directories... and prepare to clobber them!
     clobberdirs = FileList["#{@OUTPUT}/**/.clobberthis"].pathmap("%d")
     CLOBBER.include clobberdirs
   end

@@ -44,11 +44,11 @@ def pathswap(src,output_prefix="",input_prefix=@INPUT)
   src.sub(input_prefix,output_prefix)
 end
 
-dirs = [@OUTPUT+"/"]+pathswap(FileList["#{@INPUT}/**/*/"],@OUTPUT)
+dirs = [@OUTPUT+"/"]+FileList["#{@INPUT}/**/*/"].sub("",@OUTPUT)
 # ^ since directory tasks use 'mkdir -p ...', make sure the @OUTPUT comes first
 # so that it can get a .clobberthis file too
 
-def addClobberDir(dir)
+def clobberDirectory(dir)
   directory dir # initialize a basic directory task
   directory dir do # modify it to create .clobberthis file for new directory
     cmd = "echo ''>> #{dir+".clobberthis"}"
@@ -59,7 +59,7 @@ end
 
 dirTasks = []
 dirs.each do |dir|
-  addClobberDir dir
+  clobberDirectory dir
   dirTasks << dir
 end
 
@@ -200,7 +200,7 @@ CLEAN.include @MAINMETA
 task :meta => @MAINMETA
 
 tagsDir = "#{@OUTPUT}/tags/"
-addClobberDir tagsDir
+clobberDirectory tagsDir
 CLOBBER.include FileList[tagsDir+"*.xml"]
 
 navigatorTemplate = "navigator.mustache"
