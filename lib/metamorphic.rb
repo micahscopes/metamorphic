@@ -4,45 +4,84 @@ require "rake/clean"
 
 module Metamorphic
   class Morph
-    def initialize(i=nil,o=nil,&blk)
-      @i = i
-      @o = o
-      @filter = nil
-      @blk = blk
-      if @blk == nil
-        @blk = lambda{|path| path.pathmap("%{^*#{@i},#{@o}}p")}
-      end
+    @@pathmap = lambda{|i,o,src| src.pathmap("%{^*#{i},#{o}}p")}.curry
+    @@path_filter = lambda{|p| FileList[p]}
+    @@id = lambda{|x| x}
+    @@ary_id = lambda{|sources| [sources].flatten}
+
+    def initialize(filter=nil,pre=nil,post=nil,&witheach)
+      @filter = filter
+      @pre = pre ? pre : @@ary_id
+      @post = post ? post : @@ary_id
+      @witheach = witheach ? witheach : @@id
     end
 
     def self.into(&blk)
       return Morph.new(&blk)
     end
 
-    def self.transplant(i,o)
-      return Morph.new(i,o)
-    end
-    class << self; alias :move :transplant; end
-
-    def from(src,&blk)
-      sources = FileList[src]
-      results = FileList[]
-      if @filter
-        sources.select!(&@filter)
+    def paths!(i=nil,o=nil,&blk)
+      self.instance_eval do
+        @i = i
+        @o = o
+        @witheach = blk ? blk : @@id
+        @pathmapper = true
       end
-      sources.each do |path|
-        if blk && (@i || @o)
-          results << yield(path.to_s,@blk[path].to_s)
+      return self
+    end
+
+    def paths(*args,&blk)
+      ### this method allows us to chain path and non-path Morphs together
+      nu = self.clone
+      nu.instance_eval do
+        @pathmapper = true
+      end
+      if(blk)
+        return self.class.paths(*args){ |src| yield(nu.from(src)) }
+      else
+        return self.class.paths(*args){ |src| nu.from(src) }
+      end
+    end
+
+    def self.paths(*args,&blk)
+      return Morph.new.paths!(*args,&blk)
+    end
+
+    class << self; alias :move :paths; end
+    class << self; alias :transplant :paths; end
+
+    def from(sources,&blk)
+      # this method does all the heavy lifting
+      pre = @pathmapper ? @@path_filter : @pre
+      post = @pathmapper ? @@path_filter : @post
+      # puts [@i,@o].inspect
+      # puts sources.inspect
+      # puts pre.inspect
+      sources = pre[sources]
+      witheach = @pathmapper ? lambda{|src| @@pathmap[@i][@o][@witheach[src]]} : @witheach
+      # puts sources.inspect
+      # puts "()()()()"
+      sources.select!(&@filter) if @filter
+      results = []
+      sources.each do |src|
+        if blk
+          results << yield(src,witheach[src])
         else
-          results << @blk[path].to_s
+          results << witheach[src]
         end
       end
-      return results
+      return post[results]
     end
     alias :with :from
 
     def then(&blk)
       return Morph.new {|src| yield(from(src))}
     end
+
+        # def meta!(src,opts={:type => :yaml},&blk)
+        #   # takes the sources and opens a yamlstore transaction
+        #
+        # end
 
     def filter!(&blk)
       @filter = blk
@@ -72,6 +111,9 @@ module Metamorphic
       return Morph.new.by_ext!(exts)
     end
   end
+
+
+# module methods
 
   def meta(path,&blk)
     store = YAML::Store.new(path)
