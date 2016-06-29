@@ -2,17 +2,16 @@ require "metamorphic/version"
 require "yaml/store"
 require "rake"
 require "rake/clean"
+require "knit"
 
 module Metamorphic
-  COCOON = FileList[]
   class Morph
     @@pathmap = lambda{|i,o,src| src.pathmap("%{^*#{i},#{o}}p")}.curry
-    @@path_filter = lambda{|p| FileList[p]}
     @@id = lambda{|x| x}
     @@ary_id = lambda{|sources| [sources].flatten}
 
-    def initialize(filter=nil,pre=nil,post=nil,&witheach)
-      @filter = filter
+    def initialize(pre=nil,post=nil,&witheach)
+      # @filter = filter ? filter : lambda{|src| true}
       @pre = pre ? pre : @@ary_id
       @post = post ? post : @@ary_id
       @witheach = witheach ? witheach : @@id
@@ -56,14 +55,22 @@ module Metamorphic
       return @pathmapper ? lambda{|src| @@pathmap[@i][@o][@witheach[src]]} : @witheach
     end
 
-    def from(sources=nil,&blk)
-      # this method does all the heavy lifting
-      pre = @pathmapper ? @@path_filter : @pre
-      post = @pathmapper ? @@path_filter : @post
+    protected
+    def pre
+      pre = @pre.clone
+      return @pathmapper ? lambda{|s| FileList[pre[s]]} : pre
+    end
 
+    protected
+    def post
+      post = @post.clone
+      return @pathmapper ? lambda{|s| FileList[post[s]]} : post
+    end
+
+    public
+    def from(sources=nil,&blk)
       exe = lambda do |sources|
         sources = pre[sources]
-        sources.select!(&@filter) if @filter
         if blk
           results = sources.map{|src| yield(src,self.witheach[src])}
         else
@@ -79,29 +86,33 @@ module Metamorphic
     end
     alias :with :from
     alias :as :from
+    alias :each :from
 
-    def then(task=nil,&thenwitheach)
-      if task.class == Morph
-        todo = lambda{|src| task.witheach[self.witheach[src]]}
-      else
-        todo = lambda{|src| thenwitheach[self.witheach[src]]}
+    def then(nextTask=nil,&thenWithEach)
+      if nextTask && nextTask.class == Morph
+        pre = lambda{|sources| nextTask.pre[self.from[sources]]}
+        todo = nextTask.witheach
+        if thenWithEach
+          post = lambda{|results| nextTask.post[thenWithEach[results]]}
+        else
+          post = nextTask.post
+        end
+        return Morph.new(pre,post,&todo)
+      elsif nextTask == nil
+        pre = lambda{|sources| self.from[sources]}
+        return Morph.new(pre,&thenWithEach)
       end
-      return Morph.new(&todo)
     end
-
-        # def meta!(src,opts={:type => :yaml},&blk)
-        #   # takes the sources and opens a yamlstore transaction
-        #
-        # end
+    alias :into :then
 
     def filter!(&blk)
-      @filter = blk
+      pre = self.pre.clone
+      @pre = lambda{|src| pre[src].select(&blk) }
       return self
     end
 
     def filter(&blk)
-      nu = self.clone
-      nu.instance_eval { @filter = blk }
+      nu = self.then.filter!(&blk)
       return nu
     end
 
@@ -124,7 +135,7 @@ module Metamorphic
   end
 
 
-# module methods
+#### module methods
 
   def meta(path,&blk)
     store = YAML::Store.new(path)
@@ -136,7 +147,10 @@ module Metamorphic
   end
 
   YAMLFM = /(\A---\n(?<yaml>(.|\n|\r)*?)\n---\n)*(?<content>(.|\n|\r)+)/
+
+  COCOON = FileList[]
   def cocoon(path,&blk)
+    task :cocoon
     # creates a disposable directory (if directory doesn't exist already)
     if path.is_a? Hash
       dep = path.values[0]
@@ -144,11 +158,13 @@ module Metamorphic
     end
 
     parent = "#{File.dirname(path)}/"
-    puts parent
+    # puts "--"
+    # puts parent
     cocoon parent if (!File.exists?(parent) && !COCOON.include?(parent))
 
     dir = path.clone.chomp!("/")
     unless dir
+      # puts path
       file path => parent
       return COCOON
     end
