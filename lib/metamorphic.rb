@@ -136,35 +136,41 @@ module Metamorphic
   end
 
   YAMLFM = /(\A---\n(?<yaml>(.|\n|\r)*?)\n---\n)*(?<content>(.|\n|\r)+)/
-  def cocoon(dir,&blk)
+  def cocoon(path,&blk)
     # creates a disposable directory (if directory doesn't exist already)
-    if dir.is_a? Hash
-      dep = dir.values[0]
-      dir = dir.keys[0]
+    if path.is_a? Hash
+      dep = path.values[0]
+      path = path.keys[0]
     end
 
-    dir.chomp!("/")
-    return COCOON if COCOON.include? dir
-
-    if dep
-      directory dir => dep
-    else
-      directory dir
-    end
-
-    COCOON << dir
-    parent = "#{File.dirname(dir)}/"
+    parent = "#{File.dirname(path)}/"
+    puts parent
     cocoon parent if (!File.exists?(parent) && !COCOON.include?(parent))
-    directory(dir => parent)
 
-    directory dir do
+    dir = path.clone.chomp!("/")
+    unless dir
+      file path => parent
+      return COCOON
+    end
+
+    return COCOON if COCOON.include?(path)
+    directory(path => parent)
+
+    if path
+      directory path => dep
+    else
+      directory path
+    end
+
+    COCOON << path
+    directory path do
       cmd = "echo ''>> #{dir}/.cocoon"
       sh cmd; #puts cmd
-      CLOBBER.include dir
+      CLOBBER.include path
     end
-    task :cocoon => dir
+    task :cocoon => path
     if blk
-      directory(dir,&blk)
+      directory(path,&blk)
     end
 
     return COCOON
