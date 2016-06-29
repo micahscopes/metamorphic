@@ -4,6 +4,7 @@ require "rake"
 require "rake/clean"
 
 module Metamorphic
+  COCOON = FileList[]
   class Morph
     @@pathmap = lambda{|i,o,src| src.pathmap("%{^*#{i},#{o}}p")}.curry
     @@path_filter = lambda{|p| FileList[p]}
@@ -51,26 +52,22 @@ module Metamorphic
     class << self; alias :move :paths; end
     class << self; alias :transplant :paths; end
 
+    def witheach
+      return @pathmapper ? lambda{|src| @@pathmap[@i][@o][@witheach[src]]} : @witheach
+    end
+
     def from(sources=nil,&blk)
       # this method does all the heavy lifting
       pre = @pathmapper ? @@path_filter : @pre
       post = @pathmapper ? @@path_filter : @post
-      # puts [@i,@o].inspect
-      # puts sources.inspect
-      # puts pre.inspect
-      witheach = @pathmapper ? lambda{|src| @@pathmap[@i][@o][@witheach[src]]} : @witheach
-      # puts sources.inspect
-      # puts "()()()()"
+
       exe = lambda do |sources|
         sources = pre[sources]
         sources.select!(&@filter) if @filter
-        results = []
-        sources.each do |src|
-          if blk
-            results << yield(src,witheach[src])
-          else
-            results << witheach[src]
-          end
+        if blk
+          results = sources.map{|src| yield(src,self.witheach[src])}
+        else
+          results = sources.map{|src| self.witheach[src]}
         end
         return post[results]
       end
@@ -83,8 +80,13 @@ module Metamorphic
     alias :with :from
     alias :as :from
 
-    def then(&witheach)
-      return Morph.new{|src| witheach[@witheach[src]]}
+    def then(task=nil,&thenwitheach)
+      if task.class == Morph
+        todo = lambda{|src| task.witheach[self.witheach[src]]}
+      else
+        todo = lambda{|src| thenwitheach[self.witheach[src]]}
+      end
+      return Morph.new(&todo)
     end
 
         # def meta!(src,opts={:type => :yaml},&blk)
@@ -134,7 +136,7 @@ module Metamorphic
   end
 
   YAMLFM = /(\A---\n(?<yaml>(.|\n|\r)*?)\n---\n)*(?<content>(.|\n|\r)+)/
-  def clobberDirectory(dir,&blk)
+  def cocoon(dir,&blk)
     # creates a disposable directory (if directory doesn't exist already)
     if dir.is_a? Hash
       dep = dir.values[0]
@@ -142,7 +144,7 @@ module Metamorphic
     end
 
     dir.chomp!("/")
-    dir+="/"
+    return COCOON if COCOON.include? dir
 
     if dep
       directory dir => dep
@@ -150,24 +152,28 @@ module Metamorphic
       directory dir
     end
 
-    parent = File.dirname(dir)+"/"
-    if parent != "./"
-      directory dir => parent
-    end
+    COCOON << dir
+    parent = "#{File.dirname(dir)}/"
+    cocoon parent if (!File.exists?(parent) && !COCOON.include?(parent))
+    directory(dir => parent)
+
     directory dir do
-      cmd = "echo ''>> #{dir}.clobberthis"
+      cmd = "echo ''>> #{dir}/.cocoon"
       sh cmd; #puts cmd
       CLOBBER.include dir
     end
+    task :cocoon => dir
     if blk
       directory(dir,&blk)
     end
+
+    return COCOON
   end
 
   def self.included(base)
     # check for existing clobberable directories... and prepare to clobber them!
-    clobberdirs = FileList["#{@OUTPUT}/**/.clobberthis"].pathmap("%d")
-    CLOBBER.include clobberdirs
+    cocoon = FileList["#{@OUTPUT}/**/.cocoon"].pathmap("%d")
+    CLOBBER.include cocoon
   end
 end
 
