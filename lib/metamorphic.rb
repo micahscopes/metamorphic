@@ -3,15 +3,19 @@ require "yaml/store"
 require "rake"
 require "rake/clean"
 require "knit"
+require "mustache"
 
 module Metamorphic
   class Morph
-    @@pathmap = lambda{|i,o,src| src.pathmap("%{^*#{i},#{o}}p")}.curry
+    @@chpath = lambda{|i,o,s| s.pathmap("%{^*#{i},#{o}}p")}.curry
     @@id = lambda{|x| x}
     @@ary_id = lambda{|sources| [sources].flatten}
 
-    def initialize(pre=nil,post=nil,&witheach)
+    def initialize(pre=nil,post=nil,chain=nil,&witheach)
+      # puts chain.inspect
       # @filter = filter ? filter : lambda{|src| true}
+      # chain = [Morph.new(&chain)].flatten if chain.class == Proc
+      @chain = chain ? chain : []
       @pre = pre ? pre : @@ary_id
       @post = post ? post : @@ary_id
       @witheach = witheach ? witheach : @@id
@@ -21,11 +25,16 @@ module Metamorphic
       return Morph.new(&blk)
     end
 
-    def paths!(i=nil,o=nil,&blk)
+    def paths!(frm=nil,to=nil,&blk)
       self.instance_eval do
-        @i = i
-        @o = o
-        @witheach = blk ? blk : @@id
+        if frm || to
+          frm = frm ? frm : ""
+          to = to ? to : ""
+          chpath = @@chpath[frm,to]
+          @witheach = blk ? lambda{|s| chpath[blk[s]]} : chpath
+        elsif blk
+          @witheach = blk
+        end
         @pathmapper = true
       end
       return self
@@ -51,10 +60,6 @@ module Metamorphic
     class << self; alias :move :paths; end
     class << self; alias :transplant :paths; end
 
-    def witheach
-      return @pathmapper ? lambda{|src| @@pathmap[@i][@o][@witheach[src]]} : @witheach
-    end
-
     protected
     def pre
       pre = @pre.clone
@@ -67,16 +72,49 @@ module Metamorphic
       return @pathmapper ? lambda{|s| FileList[post[s]]} : post
     end
 
+    def transformation
+      return lambda do |x|
+        prex = pre[x]
+        y = post[prex.map{|j| @witheach[j]}]
+        return [prex,y]
+      end
+    end
+    def chain
+      return [self.transformation]+@chain.map{|m| m.class==Morph ? m.chain : m}.flatten
+    end
+    def doChainWith(x,returnAll=false)
+      originals = []
+      results = []
+      chain = self.chain
+      latest = nil
+
+      throw("Error: self.chain should not empty") if chain.empty?
+      chain.each do |t|
+        x2y = t[x]
+        # puts x2y.inspect
+        if x2y[0].length != originals.length
+          originals = x2y[0]
+        end
+        latest = originals.zip(x2y[1]).select{|k| k[0]!=nil && k[1]!=nil}
+        x = latest.map{|k| k[1]}
+        # puts latest
+        results << x
+      end
+      if returnAll
+        return latest.map{|k| k[0]}.zip(*results.reverse)
+      else
+        return latest.map{|k| k[1]}
+      end
+    end
+
     public
     def from(sources=nil,&blk)
       exe = lambda do |sources|
-        sources = pre[sources]
         if blk
-          results = sources.map{|src| yield(src,self.witheach[src])}
+          return doChainWith(sources,true).map{|x| yield(*x)}
         else
-          results = sources.map{|src| self.witheach[src]}
+          return doChainWith(sources)
         end
-        return post[results]
       end
       if sources
         return exe[sources]
@@ -89,31 +127,24 @@ module Metamorphic
     alias :each :from
 
     def then(nextTask=nil,&thenWithEach)
-      if nextTask && nextTask.class == Morph
-        pre = lambda{|sources| nextTask.pre[self.from[sources]]}
-        todo = nextTask.witheach
-        if thenWithEach
-          post = lambda{|results| nextTask.post[thenWithEach[results]]}
-        else
-          post = nextTask.post
-        end
-        return Morph.new(pre,post,&todo)
-      elsif nextTask == nil
-        pre = lambda{|sources| self.from[sources]}
-        return Morph.new(pre,&thenWithEach)
+      if nextTask
+        return Morph.new(nil,nil,[self,nextTask],&thenWithEach)
+      elsif thenWithEach
+        return Morph.new(nil,nil,[self,Morph.into(&thenWithEach)])
+      else
+        return lambda{|later| m.then(later)}
       end
     end
     alias :into :then
 
     def filter!(&blk)
       pre = self.pre.clone
-      @pre = lambda{|src| pre[src].select(&blk) }
+      @pre = lambda{|src| pre[src].map{|s| blk[s] ? s : nil} }
       return self
     end
 
     def filter(&blk)
-      nu = self.then.filter!(&blk)
-      return nu
+      return self.then(Morph.new.filter!(&blk))
     end
 
     def self.filter(&blk)
@@ -196,6 +227,39 @@ module Metamorphic
     # check for existing clobberable directories... and prepare to clobber them!
     cocoon = FileList["#{@OUTPUT}/**/.cocoon"].pathmap("%d")
     CLOBBER.include cocoon
+  end
+end
+
+class Metamorphosis < Mustache
+  def initialize(m)
+    @meta = m
+  end
+  class << self; alias :with :new; end
+  def with(m)
+    @meta = m
+  end
+
+  def method_missing(method_name, *args, &block)
+    method_name = method_name.to_s
+    attribute = method_name.chomp("=")
+    # puts method_name
+    set = args[0] != nil
+    if instance_variable_defined? "@#{attribute}"
+      if set
+        instance_variable_set "@#{attribute}", args[0]
+      else
+        instance_variable_get "@#{attribute}"
+      end
+    else
+      if set
+        meta(@meta) do |m|
+          m[attribute] = args[0]
+        end
+      else
+        result = meta(@meta)[attribute]
+        return result
+      end
+    end
   end
 end
 

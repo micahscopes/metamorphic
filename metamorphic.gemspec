@@ -34,4 +34,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency "rake"
   # spec.add_dependency "rake/hooks"
   spec.add_dependency "knit"
+  spec.add_dependency "mustache"
 end

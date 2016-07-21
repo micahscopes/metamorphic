@@ -5,6 +5,12 @@ require 'rake/clean'
 Bundler.require
 
 RSpec.describe Metamorphic do
+  example "transformations" do
+    m = Morph.into{|x| x + 3}
+    expect( m.with 2 ).to eq( [5] )
+    expect( m.with [2,3,4] ).to eq( [5,6,7] )
+  end
+
   example "filtering" do
     m = Morph.filter{|x| x > 3}
     expect( m.with 2 ).to eq( [] )
@@ -22,6 +28,10 @@ RSpec.describe Metamorphic do
   end
 
   example "filter then transform" do
+    words = ['ox','dog','axe','xyz']
+    f = Morph.filter{|s| s.include? "x"}
+    expect( f.then{|s| s.gsub "x", "y"}.with words ).to eq ["oy", "aye", "yyz"]
+
     m = Morph.filter{|d| d!="grey duck"}.then{|d| d.gsub("grey","blue")}
     expect( m.with ["grey duck","grey skies"] ).to eq( ["blue skies"] )
     expect( m.with ["duck","duck","grey duck"] ).to eq( ["duck","duck"] )
@@ -64,7 +74,7 @@ RSpec.describe Metamorphic do
   example "meta yaml (easy YAMLStore transactions)" do
     require 'stringex'
     self.extend Rake::DSL
-    d = 'test/recipes/'
+    d = 'test/abc/'
     sh "rm -r #{d}" if File.exist? d
     directory d; Rake::Task[d].invoke
     sZ = Morph.into{|src| src.gsub("s","ZZZZZ!")}
@@ -80,5 +90,15 @@ RSpec.describe Metamorphic do
 
     dishes = ["veggies","soy sauce","thyme"]
     recipes[*dishes]
+  end
+
+  example "chaining Morphs" do
+    times2 = Morph.into{|x| x*2}
+    expect(times2.with 4).to eq [8]
+    plus1 = Morph.into{|x| x+1}
+    expect(plus1.with 4).to eq [5]
+    expect(times2.then(plus1).with([1,2,3]){|a,b| [a,b]}).to eq [[1,3],[2,5],[3,7]]
+    expect(times2.then(plus1).with([1,2]){|a,b| [a,b]}).to eq [[1,3],[2,5]]
+    expect(times2.then(plus1).with([1]){|a,b| [a,b]}).to eq [[1,3]]
   end
 end
