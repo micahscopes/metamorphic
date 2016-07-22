@@ -167,7 +167,36 @@ module Metamorphic
 
 
 #### module methods
+  class YML < YAML::Store
+    def initialize(*args,&blk)
+      @last_cache = Time.new(0)
+      super
+    end
 
+    def cache
+      if !File.exists? path
+        return {}
+      end
+      if @last_cache <= File.mtime(path)
+        h = {}
+        @last_cache = Time.new-1 # add a small buffer
+        transaction(true){|d| roots.each{|k| h[k] = d[k]}}
+        @cache = h
+      end
+      return @cache
+      # puts @cache
+    end
+
+    # def transaction(readonly=true,&blk)
+    #   if !readonly
+    #     super(readonly) do |d|
+    #       &blk[d]
+    #
+    #     end
+    #     rtime = Time.new
+    #   end
+    # end
+  end
   class Meta < SimpleDelegator
     include Enumerable
     include Forwardable
@@ -185,27 +214,17 @@ module Metamorphic
     public
     def initialize(yml,obj=nil,path=[])
       @path = path
-      @yml = YAML::Store.new(yml)
-      @yml.define_singleton_method(:rtime,lambda{@rtime})
-      @yml.define_singleton_method(:rtime=,lambda{|t| @rtime = t})
-      @yml.rtime = Time.new(0)
+      @yml = YML.new(yml)
       if obj
         super obj
       else
-        h = {}
-        @yml.transaction{|d| @yml.roots.each{|k| h[k] = d[k]}}
-        super(h)
+        super(@yml.cache)
       end
     end
     def [](key)
       key = key.to_s if key.class == Symbol
       # puts key
-      if @yml.rtime > File.mtime(@yml.path) && super
-        res = super
-      else
-        @yml.rtime = Time.new()
-        res = @yml.transaction{|m| @path.inject(m){|h,k| h[k]}[key]}
-      end
+      res = @path.inject(@yml.cache){|h,k| h[k]}[key]
       return chain(res,key)
     end
     def <<(key,contents)
@@ -224,7 +243,7 @@ module Metamorphic
       key = key.to_s if key.class == Symbol
       val = val.to_s if val.class == Symbol
       # puts("value",val)
-      @yml.transaction do |d|
+      @yml.transaction(false) do |d|
         m = @path.inject(d){|h,k| h[k]}
         m[key] = val
       end
