@@ -168,12 +168,85 @@ module Metamorphic
 
 #### module methods
 
+  class Meta < SimpleDelegator
+    include Enumerable
+    include Forwardable
+
+    protected
+    attr_accessor :path,:yml
+
+    def chain(obj,key)
+      # if obj == nil
+      #   # throw "the chain delegated object is nil!"
+      # end
+      m = self.clone
+      m.path = @path+[key]
+      m.__setobj__(obj)
+      return m
+    end
+
+    public
+    def initialize(yml,obj=nil,path=[])
+      @path = path
+      @yml = YAML::Store.new(yml)
+      @yml.define_singleton_method(:rtime,lambda{@rtime})
+      @yml.define_singleton_method(:rtime=,lambda{|t| @rtime = t})
+      @yml.rtime = Time.new(0)
+      if obj
+        super obj
+      else
+        super({})
+      end
+    end
+    def [](key)
+      key = key.to_s if key.class == Symbol
+      # puts key
+      if @yml.rtime > File.mtime(@yml.path) && super
+        res = super
+      else
+        @yml.rtime = Time.new()
+        res = @yml.transaction{|m| @path.inject(m){|h,k| h[k]}[key]}
+      end
+      return chain(res,key)
+    end
+    def <<(key,contents)
+      key = key.to_s if key.class == Symbol
+      val = val.to_s if contents.class == Symbol
+      contents = [contents] unless contents.respond_to? :each
+      @yml.transaction do |d|
+        m = @path.inject(d){|h,k| h[k]}
+        res = contents.knit(m[key])
+        # puts("setting",key,res)
+        m[key] = res
+      end
+      return chain(res,key)
+    end
+    def []=(key,val)
+      key = key.to_s if key.class == Symbol
+      val = val.to_s if val.class == Symbol
+      # puts("value",val)
+      @yml.transaction do |d|
+        m = @path.inject(d){|h,k| h[k]}
+        m[key] = val
+      end
+      return chain(val,key)
+    end
+    def each(*args,&blk)
+      h = {}
+      @yml.transaction do |m|
+        m.roots.each do |r|
+          h = h.knit(r => m[r])
+        end
+      end
+      h.each(&blk)
+    end
+  end
+
   def meta(path,&blk)
-    store = YAML::Store.new(path)
     if blk
-      return store.transaction(&blk)
+      return Meta.new(path).transaction(&blk)
     else
-      return lambda {|key| store.transaction{|d| d[key]}}
+      return Meta.new(path)
     end
   end
 
@@ -230,7 +303,7 @@ module Metamorphic
   end
 end
 
-class Metamorphosis < Mustache
+class Metamorphosis2 < Mustache
   def initialize(m)
     @meta = m
   end
@@ -261,6 +334,13 @@ class Metamorphosis < Mustache
       end
     end
   end
+end
+
+class Metamorphosis < Mustache
+  extend Forwardable
+  attr_accessor :meta
+  def_delegators :@meta, :[], :[]=
+
 end
 
 include Metamorphic
