@@ -176,9 +176,6 @@ module Metamorphic
     attr_accessor :path,:yml
 
     def chain(obj,key)
-      # if obj == nil
-      #   # throw "the chain delegated object is nil!"
-      # end
       m = self.clone
       m.path = @path+[key]
       m.__setobj__(obj)
@@ -195,7 +192,9 @@ module Metamorphic
       if obj
         super obj
       else
-        super({})
+        h = {}
+        @yml.transaction{|d| @yml.roots.each{|k| h[k] = d[k]}}
+        super(h)
       end
     end
     def [](key)
