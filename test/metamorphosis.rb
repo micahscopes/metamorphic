@@ -4,21 +4,6 @@ require 'rake'
 require 'rake/clean'
 Bundler.require
 
-# RSpec.describe Metamorphosis do
-#   example "set and get attributes dynamically from yaml" do
-#     m = Metamorphosis.new("test/meta.yaml")
-#     m.junk="fluff"
-#     expect(m.junk).to eq("fluff")
-#
-#     m.junk "treasure"
-#     expect(m.junk).to eq("treasure")
-#
-#     m.junk 'a' => 'b'
-#     expect(m.junk['a']).to eq('b')
-#   end
-# end
-
-
 RSpec.describe Meta do
   example "get/set by key" do
     f = "test/meta.yaml"
@@ -50,5 +35,33 @@ RSpec.describe Meta do
     m[1][2]
 
     expect(m[1][2]).to eq(b)
+  end
+  example "knit into key" do
+    f = "test/meta.yaml"
+    Rake::sh "echo '' > #{f}"
+    m = Meta.new(f)
+    m[1] = {}
+    m[1] << {:o=>:k}
+    expect(m[1][:o]).to eq(:k)
+
+    m << {:o=>:k}
+    expect(m[:o]).to eq(:k)
+
+    m[:b] = [1,2,3]
+    m[:b] << [4]
+    expect(m[:b]).to eq([1,2,3,4])
+  end
+  example "knit one meta store into another" do
+    f = "test/f.yaml"
+    g = "test/g.yaml"
+    Rake::sh "echo '' > #{f}"
+    Rake::sh "echo '' > #{g}"
+    g = meta(g)
+    g["abc"] = "efg"
+    f = meta(f)
+    f["xyz"] = "qrs"
+    f << g
+    expect(f["abc"]).to eq("efg")
+    expect(f["xyz"]).to eq("qrs")
   end
 end

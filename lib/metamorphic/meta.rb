@@ -7,7 +7,7 @@ module Metamorphic
       super
     end
 
-    def base_hash
+    def root_hash
       if !File.exists? path
         return {}
       end
@@ -18,24 +18,13 @@ module Metamorphic
         @cache = h
       end
       return @cache
-      # puts @cache
     end
-
-    # def transaction(readonly=true,&blk)
-    #   if !readonly
-    #     super(readonly) do |d|
-    #       &blk[d]
-    #
-    #     end
-    #     rtime = Time.new
-    #   end
-    # end
   end
 
   class Meta < SimpleDelegator
     include Enumerable
     extend Forwardable
-    def_delegators :@yml, :base_hash, :transaction
+    def_delegators :@yml, :root_hash, :transaction
 
     protected
     attr_accessor :path,:yml
@@ -48,37 +37,52 @@ module Metamorphic
     end
 
     public
+    def __getobj__
+      return @path.inject(root_hash){|h,k| h[k]}
+    end
     def initialize(yml,obj=nil,path=[])
       @path = path
       @yml = YML.new(yml)
       if obj
         super obj
       else
-        super(base_hash)
+        super root_hash
       end
     end
-    def [](key)
-      key = key.to_s if key.class == Symbol
+    def [](key=nil)
+      if key == nil
+        __setobj__(root_hash)
+        return self
+      end
+      # key = key.to_s if key.class == Symbol
       # puts key
-      res = @path.inject(base_hash){|h,k| h[k]}[key]
+      res = @path.inject(root_hash){|h,k| h[k]}[key]
       return chain(res,key)
     end
 
-    def <<(key,contents)
-      key = key.to_s if key.class == Symbol
-      val = val.to_s if contents.class == Symbol
+    def <<(contents)
       contents = [contents] unless contents.respond_to? :each
+      res = nil
       transaction(false) do |d|
-        m = @path.inject(d){|h,k| h[k]}
-        res = contents.knit(m[key])
-        # puts("setting",key,res)
-        m[key] = res
+        unless @path == []
+          upto = @path.clone
+          last = upto.pop
+
+          m = upto.inject(d){|h,k| h[k]}
+          m[last] = [m[last]] unless m[last].respond_to? :each
+          res = m[last].knit(contents)
+          m[last] = res
+        else
+          contents.each do |k,v|
+            d[k] = v
+          end
+        end
       end
-      return chain(res,key)
+      return self
     end
     def []=(key,val)
-      key = key.to_s if key.class == Symbol
-      val = val.to_s if val.class == Symbol
+      # key = key.to_s if key.class == Symbol
+      # val = val.to_s if val.class == Symbol
       # puts("value",val)
       transaction(false) do |d|
         m = @path.inject(d){|h,k| h[k]}
@@ -86,11 +90,25 @@ module Metamorphic
       end
       return chain(val,key)
     end
-    def each(*args,&blk)
-      base_hash.each(&blk)
-    end
-  end
 
+    def each(*args,&blk)
+      obj = __getobj__
+      transaction(false) do |d|
+        m = @path.inject(d){|h,k| h[k]}
+        if obj.respond_to? :keys
+          obj.each do |k,v|
+            blk[k,v]
+          end
+        else
+          obj.each do |k|
+            blk[k]
+          end
+        end
+      end
+      return __getobj__
+    end
+
+  end
 end
 #
 # class Metamorphosis2 < Mustache

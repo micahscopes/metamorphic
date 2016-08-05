@@ -3,7 +3,6 @@ module Metamorphic
     @@chpath = lambda{|i,o,s| s.pathmap("%{^*#{i},#{o}}p")}.curry
     @@id = lambda{|x| x}
     @@ary_id = lambda{|sources| [sources].flatten}
-
     def initialize(pre=nil,post=nil,chain=nil,&witheach)
       # puts chain.inspect
       # @filter = filter ? filter : lambda{|src| true}
@@ -14,6 +13,9 @@ module Metamorphic
       @witheach = witheach ? witheach : @@id
     end
 
+    def self.static
+      return Morph.new()
+    end
     def self.into(&blk)
       return Morph.new(&blk)
     end
