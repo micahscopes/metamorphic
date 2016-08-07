@@ -42,6 +42,8 @@ module Metamorphic
       # todo: make this happen in a single write by writing a lower level
       # version mimicking the the YAML::Store transaction method.
       # todo: get front matter detection for free from YAML::Store parsing?
+      # todo: simplify the logic of this function...
+      #       ...it's a little finicky right now.
       if File.exists?(path) && (!readonly || needs_refreshment)
         src = File.read(path)
         yamlfm = src.scan YAMLFM
