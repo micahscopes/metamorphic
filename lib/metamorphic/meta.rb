@@ -2,47 +2,99 @@ require "knit"
 
 module Metamorphic
   class YML < YAML::Store
+    private
+    def needs_refreshment
+       return @last_cache <= File.mtime(path) rescue true
+    end
+    def refresh
+      if !File.exists? path
+        @cache = {}
+      end
+      if needs_refreshment
+        needed_refreshment = true
+        h = {}
+        transaction(true){|d| roots.each{|k| h[k] = d[k]}}
+        # puts ("h"+h.inspect)
+        @cache = h
+      end
+      # make sure all the refreshment is finished before time stamping
+      @last_cache = Time.new-1 if needed_refreshment # with a small buffer
+      return needed_refreshment
+    end
+
+    public
     def initialize(*args,&blk)
       @last_cache = Time.new(0)
       super
     end
 
     def root_hash
-      if !File.exists? path
-        return {}
-      end
-      if @last_cache <= File.mtime(path)
-        h = {}
-        @last_cache = Time.new-1 # add a small buffer
-        transaction(true){|d| roots.each{|k| h[k] = d[k]}}
-        @cache = h
-      end
+      refresh
       return @cache
+    end
+
+    def content
+      refresh
+      return @data
+    end
+
+    def transaction(readonly=false,&blk)
+      # todo: make this happen in a single write by writing a lower level
+      # version mimicking the the YAML::Store transaction method.
+      # todo: get front matter detection for free from YAML::Store parsing?
+      if File.exists?(path) && (!readonly || needs_refreshment)
+        src = File.read(path)
+        yamlfm = src.scan YAMLFM
+        # puts yamlfm
+        # don't do the regex if the file hasn't changed since last read
+        metadata = yamlfm[0][1] rescue nil
+        r = /\-\-\-(?:\n|\r|.)*?(?:\-\-\-\s*?.*?\n)((.|\n|\r|\Z)*)/
+        @data = src.match(r)[1] rescue (metadata ? nil : src)
+        if !readonly && (metadata == nil || metadata.empty?)
+          File.write(path,"")
+        end
+      end
+      result = super(readonly,&blk) rescue {}
+      if !readonly && result != {}
+        if @data
+          f = File.open(path,'a') if @data
+          f.write("---\n")
+          f.write(@data)
+          f.close
+        end
+      end
+      return result
     end
   end
 
   class Meta < SimpleDelegator
     include Enumerable
     extend Forwardable
-    def_delegators :@yml, :root_hash, :transaction
+    def_delegators :@yml, :root_hash, :transaction, :content
 
     protected
-    attr_accessor :path,:yml
-
+    attr_accessor :branch,:yml
+    def self.about(source_path,target_meta_path=nil,frontmatter=false,suffix=".meta.yaml")
+      if target_path
+        fm = YAMLFM(File.read(source_path))
+        m = initialize(target_meta_path)
+      end
+    end
     def chain(obj,key)
       m = self.clone
-      m.path = @path+[key]
+      m.branch = @branch+[key]
       m.__setobj__(obj)
       return m
     end
 
     public
     def __getobj__
-      return @path.inject(root_hash){|h,k| h[k]}
+      return @branch.inject(root_hash){|h,k| h[k]}
     end
-    def initialize(yml,obj=nil,path=[])
-      @path = path
-      @yml = YML.new(yml)
+    def initialize(src,obj=nil,branch=[])
+      @src = src
+      @branch = branch
+      @yml = YML.new(src)
       if obj
         super obj
       else
@@ -56,7 +108,7 @@ module Metamorphic
       end
       # key = key.to_s if key.class == Symbol
       # puts key
-      res = @path.inject(root_hash){|h,k| h[k]}[key]
+      res = @branch.inject(root_hash){|h,k| h[k]}[key]
       return chain(res,key)
     end
 
@@ -64,8 +116,8 @@ module Metamorphic
       contents = [contents] unless contents.respond_to? :each
       res = nil
       transaction(false) do |d|
-        unless @path == []
-          upto = @path.clone
+        unless @branch == []
+          upto = @branch.clone
           last = upto.pop
 
           m = upto.inject(d){|h,k| h[k]}
@@ -81,11 +133,8 @@ module Metamorphic
       return self
     end
     def []=(key,val)
-      # key = key.to_s if key.class == Symbol
-      # val = val.to_s if val.class == Symbol
-      # puts("value",val)
       transaction(false) do |d|
-        m = @path.inject(d){|h,k| h[k]}
+        m = @branch.inject(d){|h,k| h[k]}
         m[key] = val
       end
       return chain(val,key)
@@ -94,7 +143,7 @@ module Metamorphic
     def each(*args,&blk)
       obj = __getobj__
       transaction(false) do |d|
-        m = @path.inject(d){|h,k| h[k]}
+        m = @branch.inject(d){|h,k| h[k]}
         if obj.respond_to? :keys
           obj.each do |k,v|
             blk[k,v]
@@ -110,36 +159,3 @@ module Metamorphic
 
   end
 end
-#
-# class Metamorphosis2 < Mustache
-#   def initialize(m)
-#     @meta = m
-#   end
-#   class << self; alias :with :new; end
-#   def with(m)
-#     @meta = m
-#   end
-#
-#   def method_missing(method_name, *args, &block)
-#     method_name = method_name.to_s
-#     attribute = method_name.chomp("=")
-#     # puts method_name
-#     set = args[0] != nil
-#     if instance_variable_defined? "@#{attribute}"
-#       if set
-#         instance_variable_set "@#{attribute}", args[0]
-#       else
-#         instance_variable_get "@#{attribute}"
-#       end
-#     else
-#       if set
-#         meta(@meta) do |m|
-#           m[attribute] = args[0]
-#         end
-#       else
-#         result = meta(@meta)[attribute]
-#         return result
-#       end
-#     end
-#   end
-# end

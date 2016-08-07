@@ -64,4 +64,24 @@ RSpec.describe Meta do
     expect(f["abc"]).to eq("efg")
     expect(f["xyz"]).to eq("qrs")
   end
+  example "get yaml front matter" do
+    # todo...
+  end
+  example "preserve yaml front matter and data" do
+    s = <<-doc
+---
+a: b
+c: d
+---
+lorem ipsum bla bla bla
+doc
+    path = 'test/funky.md'
+    File.write(path,s)
+    m = meta path
+    m['c'] = 'd'
+    expect(m['c']).to eq('d')
+    expect(File.read(path)).to eq(s)
+  end
+  example "seed from content file" do
+  end
 end

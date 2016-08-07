@@ -15,7 +15,7 @@ module Metamorphic
     end
   end
 
-  YAMLFM = /(\A---\n(?<yaml>(.|\n|\r)*?)\n---\n)*(?<content>(.|\n|\r)+)/
+  YAMLFM = /\-\-\-(?:\n|\r|\s(.+))((?:.|\n|\r)*?)(?=(?:(?:\n|\r)\-\-\-(?:\n|\r|(.+))|\Z))/
 
   COCOON = FileList[]
   def cocoon(path,&blk)
