@@ -68,20 +68,35 @@ RSpec.describe Meta do
     # todo...
   end
   example "preserve yaml front matter and data" do
-    s = <<-doc
----
+    s=<<-doc
 a: b
 c: d
 ---
 lorem ipsum bla bla bla
-doc
+    doc
+
     path = 'test/funky.md'
     File.write(path,s)
     m = meta path
     m['c'] = 'd'
     expect(m['c']).to eq('d')
+    s = "---\n"+s
+    expect(File.read(path)).to eq(s)
+
+    File.write(path,s)
+    m['c'] = 'd'
     expect(File.read(path)).to eq(s)
   end
-  example "seed from content file" do
+  example "meta from source file" do
+    s=<<-doc
+a: b
+c: d
+---
+lorem ipsum bla bla bla
+    doc
+
+    path = 'test/funky.md'
+    File.write(path,s)
+    m = meta path
   end
 end

@@ -1,6 +1,39 @@
 require "knit"
 
 module Metamorphic
+  def parse_yaml_stream(str,lim=1)
+    blocks = []
+    current = nil
+    n = 0
+    str.each_line do |l|
+      is_delim = l[0,3] == "---"
+      if is_delim && (!lim || n<lim)
+        if current
+          blocks<<current
+          n+=1
+          # next if n==lim
+        end
+        info = l.clone
+        info.slice!(0,3)
+        info.strip!
+        if n<lim
+          current = {:info=>info,:head=>l+"\n",:body=>""}
+        else
+          current = {:head=>l,:body=>""}
+        end
+      else
+        if current
+          current[:body]<<l
+        else
+          current = {:head=>"",:body=>l}
+        end
+      end
+    end
+    blocks << current if current
+    return blocks
+  end
+
+  DATAKEY = "content"
   class YML < YAML::Store
     private
     def needs_refreshment
@@ -9,17 +42,22 @@ module Metamorphic
     def refresh
       if !File.exists? path
         @cache = {}
+        @cache_hash = nil
       end
       if needs_refreshment
-        needed_refreshment = true
         h = {}
         transaction(true){|d| roots.each{|k| h[k] = d[k]}}
-        # puts ("h"+h.inspect)
         @cache = h
+        @last_cache = Time.new-1
+        needed_refreshment = true
       end
-      # make sure all the refreshment is finished before time stamping
-      @last_cache = Time.new-1 if needed_refreshment # with a small buffer
       return needed_refreshment
+    end
+
+    attr_reader :last_hash
+    protected
+    def has_yaml_suffix
+      [".yaml",".yml"].index path.pathmap("%x")
     end
 
     public
@@ -38,33 +76,57 @@ module Metamorphic
       return @data
     end
 
-    def transaction(readonly=false,&blk)
-      # todo: make this happen in a single write by writing a lower level
-      # version mimicking the the YAML::Store transaction method.
-      # todo: get front matter detection for free from YAML::Store parsing?
-      # todo: simplify the logic of this function...
-      #       ...it's a little finicky right now.
+    def content=(str)
+
+    end
+
+    def transaction(readonly=false,data=nil,&blk)
       if File.exists?(path) && (!readonly || needs_refreshment)
-        src = File.read(path)
-        yamlfm = src.scan YAMLFM
-        # puts yamlfm
-        # don't do the regex if the file hasn't changed since last read
-        metadata = yamlfm[0][1] rescue nil
-        r = /\-\-\-(?:\n|\r|.)*?(?:\-\-\-\s*?.*?\n)((.|\n|\r|\Z)*)/
-        @data = src.match(r)[1] rescue (metadata ? nil : src)
-        if !readonly && (metadata == nil || metadata.empty?)
-          File.write(path,"")
+        raw = File.read(path)
+        parsed = parse_yaml_stream(raw)
+        # puts parsed.inspect
+        # puts "PARSED INTO #{parsed.length} BLOCKS"
+        if parsed.length == 1
+          p = parsed[0]
+          @data = data ? data : p[:body]
+          if !readonly # then something may have changed, write data (content)
+            # File.write(path,"") if !readonly
+            result = super(readonly,&blk) rescue Exception
+            if (data &&   result != Exception) || (result == Exception)
+              # result = super(readonly,&blk) rescue Exception
+              f = File.open(path,"a")
+              f.write(p[:head]+@data)
+              f.close
+            end
+          else
+            result = super(readonly,&blk) rescue Exception
+          end
+        elsif parsed.length == 2
+          p = parsed[1]
+          data = p[:body] if !data
+          @data = data ? data : p[:body]
+          result = super(readonly,&blk) rescue Exception
+          if !readonly # then something may have changed, write data (content)
+            if @data && result != Exception
+              f = File.open(path,"a")
+              p[:head] = "---"+p[:head] if p[:head][0,3]!="---"
+              f.write(p[:head]+@data)
+              f.close
+            end
+          end
+        elsif parsed.length == 0
+          result = super(readonly,&blk) rescue Exception
+          if @data && result != Exception
+            f = File.open(path,"a")
+            f.write("---\n"+@data)
+            f.close
+          end
         end
+      else
+        result = super(readonly,&blk) rescue Exception
       end
-      result = super(readonly,&blk) rescue {}
-      if !readonly && result != {}
-        if @data
-          f = File.open(path,'a') if @data
-          f.write("---\n")
-          f.write(@data)
-          f.close
-        end
-      end
+      # puts result
+      result = {} if result == Exception
       return result
     end
   end
@@ -72,36 +134,86 @@ module Metamorphic
   class Meta < SimpleDelegator
     include Enumerable
     extend Forwardable
-    def_delegators :@yml, :root_hash, :transaction, :content
+    def_delegators :@yml, :path, :root_hash, :transaction, :content, :has_yaml_suffix
 
     protected
     attr_accessor :branch,:yml
-    def self.about(source_path,target_meta_path=nil,frontmatter=false,suffix=".meta.yaml")
-      if target_path
-        fm = YAMLFM(File.read(source_path))
-        m = initialize(target_meta_path)
+    def self.about(source_path,target_meta_path=nil,suffix=".meta.yaml",data_key="content")
+      target_meta_path = target_meta_path ? target_meta_path : source_path+suffix
+      data_as_yaml = [".yaml",".yml"].index target_meta_path.pathmap("%x")
+      m = meta(target_meta_path)
+      src = meta(source_path)
+      m << src
+      if data_as_yaml
+        # puts "putting data in yaml with key '#{data_key}'"
+        m[data_key] = src.content
       end
-    end
-    def chain(obj,key)
-      m = self.clone
-      m.branch = @branch+[key]
-      m.__setobj__(obj)
       return m
     end
-
     public
     def __getobj__
       return @branch.inject(root_hash){|h,k| h[k]}
     end
-    def initialize(src,obj=nil,branch=[])
-      @src = src
-      @branch = branch
-      @yml = YML.new(src)
-      if obj
-        super obj
+
+    def initialize(pth=nil,kargs={})
+      defaults = {:branch=>[],:data_key=>DATAKEY,:suffix=>".meta.yaml"}
+
+      if pth.class == Hash
+        kargs = pth
+        kargs = defaults.merge(kargs)
+        pth = kargs[:path]
       else
-        super root_hash
+        kargs = defaults.merge(kargs)
       end
+      @src = kargs[:src]
+
+      src_is_yaml = [".yaml",".yml"].index @src.pathmap("%x") rescue false
+      if src_is_yaml
+        pth = kargs[:src] unless pth
+        @src = nil
+      else
+        pth = kargs[:src]+kargs[:suffix] unless pth
+      end
+
+      @data_key = kargs[:data_key]
+      @branch = kargs[:branch]
+      @yml = YML.new(pth)
+
+      scan if @src
+    end
+
+    def descend(key,obj=nil)
+      m = self.clone
+      m.branch = @branch+[key]
+      m.__setobj__(obj) if obj
+      return m
+    end
+    def ascend
+      m = self.clone
+      m.branch = @branch[0,@branch.length-1]
+      return m
+    end
+    def root
+      m = self.clone
+      m.branch = []
+      return m
+    end
+
+    def scan(src=@src,data_key=@data_key)
+      if src == nil || src == path
+        return false
+      end
+      # puts src
+      # puts path
+
+      previous_hash = @last_hash
+      src = meta(src)
+      self << src
+      if has_yaml_suffix
+        # puts "putting data in yaml with key '#{data_key}'"
+        self[data_key] = src.content
+      end
+      return previous_hash != @last_hash
     end
     def [](key=nil)
       if key == nil
@@ -110,23 +222,17 @@ module Metamorphic
       end
       # key = key.to_s if key.class == Symbol
       # puts key
-      res = @branch.inject(root_hash){|h,k| h[k]}[key]
-      return chain(res,key)
+      # res = @branch.inject(root_hash){|h,k| h[k]}[key]
+      return descend(key)
     end
 
     def <<(contents)
       contents = [contents] unless contents.respond_to? :each
-      res = nil
-      transaction(false) do |d|
-        unless @branch == []
-          upto = @branch.clone
-          last = upto.pop
-
-          m = upto.inject(d){|h,k| h[k]}
-          m[last] = [m[last]] unless m[last].respond_to? :each
-          res = m[last].knit(contents)
-          m[last] = res
-        else
+      k = @branch.last
+      if k
+        ascend[k]=self.knit(contents)
+      else
+        transaction(false) do |d|
           contents.each do |k,v|
             d[k] = v
           end
@@ -134,12 +240,34 @@ module Metamorphic
       end
       return self
     end
+    #
+    # def <<(contents)
+    #   contents = [contents] unless contents.respond_to? :each
+    #   res = nil
+    #   transaction(false) do |d|
+    #     unless @branch == []
+    #       upto = @branch.clone
+    #       last = upto.pop
+    #
+    #       m = upto.inject(d){|h,k| h[k]}
+    #       m[last] = [m[last]] unless m[last].respond_to? :each
+    #       res = m[last].knit(contents)
+    #       m[last] = res
+    #     else
+    #       contents.each do |k,v|
+    #         d[k] = v
+    #       end
+    #     end
+    #   end
+    #   return self
+    # end
+
     def []=(key,val)
       transaction(false) do |d|
         m = @branch.inject(d){|h,k| h[k]}
         m[key] = val
       end
-      return chain(val,key)
+      return descend(key,val)
     end
 
     def each(*args,&blk)
@@ -158,6 +286,5 @@ module Metamorphic
       end
       return __getobj__
     end
-
   end
 end
