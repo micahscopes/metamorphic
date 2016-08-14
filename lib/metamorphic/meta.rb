@@ -92,7 +92,7 @@ module Metamorphic
           if !readonly # then something may have changed, write data (content)
             # File.write(path,"") if !readonly
             result = super(readonly,&blk) rescue Exception
-            if (data &&   result != Exception) || (result == Exception)
+            if (data &&  result != Exception) || (result == Exception) && !has_yaml_suffix
               # result = super(readonly,&blk) rescue Exception
               f = File.open(path,"a")
               f.write(p[:head]+@data)
@@ -107,7 +107,7 @@ module Metamorphic
           @data = data ? data : p[:body]
           result = super(readonly,&blk) rescue Exception
           if !readonly # then something may have changed, write data (content)
-            if @data && result != Exception
+            if @data && result != Exception && !has_yaml_suffix
               f = File.open(path,"a")
               p[:head] = "---"+p[:head] if p[:head][0,3]!="---"
               f.write(p[:head]+@data)
@@ -116,7 +116,7 @@ module Metamorphic
           end
         elsif parsed.length == 0
           result = super(readonly,&blk) rescue Exception
-          if @data && result != Exception
+          if @data && result != Exception && !has_yaml_suffix
             f = File.open(path,"a")
             f.write("---\n"+@data)
             f.close
@@ -138,17 +138,9 @@ module Metamorphic
 
     protected
     attr_accessor :branch,:yml
-    def self.about(source_path,target_meta_path=nil,suffix=".meta.yaml",data_key="content")
-      target_meta_path = target_meta_path ? target_meta_path : source_path+suffix
-      data_as_yaml = [".yaml",".yml"].index target_meta_path.pathmap("%x")
-      m = meta(target_meta_path)
-      src = meta(source_path)
-      m << src
-      if data_as_yaml
-        # puts "putting data in yaml with key '#{data_key}'"
-        m[data_key] = src.content
-      end
-      return m
+    def self.about(source_path,kargs={})
+      kargs = kargs.merge({:src => source_path})
+      return Meta.new(kargs)
     end
     public
     def __getobj__

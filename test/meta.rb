@@ -68,14 +68,14 @@ RSpec.describe Meta do
     # todo...
   end
   example "preserve yaml front matter and data" do
-    s=<<-doc
+    s=<<-DOC
 a: b
 c: d
 ---
 lorem ipsum bla bla bla
-    doc
+DOC
 
-    path = 'test/funky.md'
+    path = 'test/some_very_nice.md'
     File.write(path,s)
     m = meta path
     m['c'] = 'd'
@@ -87,16 +87,36 @@ lorem ipsum bla bla bla
     m['c'] = 'd'
     expect(File.read(path)).to eq(s)
   end
-  example "meta from source file" do
-    s=<<-doc
+  example "meta from source" do
+    content = "abc"
+    s=<<-DOC
 a: b
 c: d
 ---
-lorem ipsum bla bla bla
-    doc
-
-    path = 'test/funky.md'
+DOC
+s = s+content
+    path = 'test/some_very_nice.md'
+    src = path+".meta.yaml"
     File.write(path,s)
-    m = meta path
+    File.write(src,"")
+    m = Meta.about(path)
+    expect(m["a"]).to eq("b")
+    expect(m["content"]).to eq("#{content}")
+
+    content2 = "12345"
+
+    f = File.open(path,"a")
+    f.write(content2)
+    f.close
+    expect(m["content"]).to eq("#{content}")
+    m.scan
+    expect(m["content"]).to eq("#{content}#{content2}")
+
+    f = File.open(path,"a")
+    f.write(content2)
+    f.close
+    expect(m["content"]).to eq("#{content}#{content2}")
+    m.scan
+    expect(m["content"]).to eq("#{content}#{content2}#{content2}")
   end
 end
