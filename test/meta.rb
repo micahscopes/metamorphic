@@ -64,6 +64,28 @@ RSpec.describe Meta do
     expect(f["abc"]).to eq("efg")
     expect(f["xyz"]).to eq("qrs")
   end
+  example "knit one meta store into another's child" do
+    f = "test/f.yaml"
+    g = "test/g.yaml"
+    Rake::sh "echo '' > #{f}"
+    Rake::sh "echo '' > #{g}"
+    g = meta(g)
+    g[1] = {2=>{3=>{4=>5}}}
+    f = meta(f)
+    f["xyz"] = "qrs"
+    g[1][2] << f
+    expect(g[1][2]["xyz"]).to eq("qrs")
+  end
+  example "another knitting example" do
+    f = "test/f.yaml"
+    g = "test/g.yaml"
+    Rake::sh "echo '' > #{f}"
+    Rake::sh "echo '' > #{g}"
+    m = meta(f); n = meta(g)
+    m << {"ary"=>[],"hsh"=>{}}
+    n["stuff"] = {1=>2,3=>4,5=>["abc","def"]}
+    m["ary"] << n["stuff"]
+  end
   example "get yaml front matter" do
     # todo...
   end

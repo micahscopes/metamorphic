@@ -181,6 +181,7 @@ module Metamorphic
       return m
     end
     def ascend
+      # puts self
       m = self.clone
       m.branch = @branch[0,@branch.length-1]
       return m
@@ -190,7 +191,13 @@ module Metamorphic
       m.branch = []
       return m
     end
-
+    def clone
+      cl = Object.instance_method(:clone).bind(self)
+      new = cl.call
+      obj = __getobj__.clone rescue __getobj__
+      new.__setobj__(obj)
+      new
+    end
     def scan(src=@src,data_key=@data_key)
       if src == nil || src == path
         return false
@@ -217,12 +224,13 @@ module Metamorphic
       # res = @branch.inject(root_hash){|h,k| h[k]}[key]
       return descend(key)
     end
-
     def <<(contents)
+      # throw(Exception.new("WTF")) if false
       contents = [contents] unless contents.respond_to? :each
+      contents = contents.to_h if contents.respond_to? :keys
       k = @branch.last
       if k
-        ascend[k]=self.knit(contents)
+        ascend[k]=__getobj__.knit(contents)
       else
         transaction(false) do |d|
           contents.each do |k,v|
@@ -232,28 +240,6 @@ module Metamorphic
       end
       return self
     end
-    #
-    # def <<(contents)
-    #   contents = [contents] unless contents.respond_to? :each
-    #   res = nil
-    #   transaction(false) do |d|
-    #     unless @branch == []
-    #       upto = @branch.clone
-    #       last = upto.pop
-    #
-    #       m = upto.inject(d){|h,k| h[k]}
-    #       m[last] = [m[last]] unless m[last].respond_to? :each
-    #       res = m[last].knit(contents)
-    #       m[last] = res
-    #     else
-    #       contents.each do |k,v|
-    #         d[k] = v
-    #       end
-    #     end
-    #   end
-    #   return self
-    # end
-
     def []=(key,val)
       transaction(false) do |d|
         m = @branch.inject(d){|h,k| h[k]}
