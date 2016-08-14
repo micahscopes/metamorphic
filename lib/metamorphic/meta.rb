@@ -91,7 +91,7 @@ module Metamorphic
           @data = data ? data : p[:body]
           if !readonly # then something may have changed, write data (content)
             # File.write(path,"") if !readonly
-            result = super(readonly,&blk) rescue Exception
+            result = super(readonly,&blk) #rescue Exception
             if (data &&  result != Exception) || (result == Exception) && !has_yaml_suffix
               # result = super(readonly,&blk) rescue Exception
               f = File.open(path,"a")
@@ -224,13 +224,33 @@ module Metamorphic
       # res = @branch.inject(root_hash){|h,k| h[k]}[key]
       return descend(key)
     end
-    def <<(contents)
+    def **(contents)
+      # knit
       # throw(Exception.new("WTF")) if false
       contents = [contents] unless contents.respond_to? :each
       contents = contents.to_h if contents.respond_to? :keys
       k = @branch.last
       if k
         ascend[k]=__getobj__.knit(contents)
+      else
+        transaction(false) do |d|
+          contents.each do |k,v|
+            d[k] = v
+          end
+        end
+      end
+      return self
+    end
+    def <<(contents)
+      # push
+      # throw(Exception.new("WTF")) if false
+      contents = [contents] unless contents.respond_to? :each
+      contents = contents.to_h if contents.respond_to? :keys
+      k = @branch.last
+      if k
+        ary = __getobj__
+        ary = ary.respond_to?(:push) ? ary : [ary]
+        ascend[k]=ary.push(contents)
       else
         transaction(false) do |d|
           contents.each do |k,v|
