@@ -91,7 +91,11 @@ module Metamorphic
           @data = data ? data : p[:body]
           if !readonly # then something may have changed, write data (content)
             # File.write(path,"") if !readonly
-            result = super(readonly,&blk) #rescue Exception
+            result = begin
+              super(readonly,&blk)
+            rescue PStore::Error
+              {}
+            end
             if (data &&  result != Exception) || (result == Exception) && !has_yaml_suffix
               # result = super(readonly,&blk) rescue Exception
               f = File.open(path,"a")
@@ -172,6 +176,7 @@ module Metamorphic
       @yml = YML.new(pth)
 
       scan if @src
+      super __getobj__
     end
 
     def descend(key,obj=nil)
@@ -269,20 +274,8 @@ module Metamorphic
     end
 
     def each(*args,&blk)
-      obj = __getobj__
-      transaction(false) do |d|
-        m = @branch.inject(d){|h,k| h[k]}
-        if obj.respond_to? :keys
-          obj.each do |k,v|
-            blk[k,v]
-          end
-        else
-          obj.each do |k|
-            blk[k]
-          end
-        end
-      end
-      return __getobj__
+      obj = __getobj__.clone rescue __getobj__
+      return obj.each(*args,&blk)
     end
   end
 end
