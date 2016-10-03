@@ -9,15 +9,15 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Micah"]
   spec.email         = ["fitchmicah@gmail.com"]
 
-  spec.summary       = "fine"
-  spec.description   = "ok."
+  spec.summary       = "Meta-morphosize human readable meta-data into wonderous creations."
+  spec.description   = "A collection of more and less functional tools for collecting and transforming metadata.  Designed to build static websites with Rake... useful for so much more!"
   spec.homepage      = "http://github.com/micahscopes/metamorphic"
   spec.license       = "MIT"
 
   # Prevent pushing this gem to RubyGems.org by setting 'allowed_push_host', or
   # delete this section to allow pushing this gem to any host.
   if spec.respond_to?(:metadata)
-    spec.metadata['allowed_push_host'] = "TODO: Set to 'http://mygemserver.com'"
+    spec.metadata['allowed_push_host'] = "https://rubygems.org"
   else
     raise "RubyGems 2.0 or newer is required to protect against public gem pushes."
   end
