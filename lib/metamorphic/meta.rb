@@ -278,4 +278,12 @@ module Metamorphic
       return obj.each(*args,&blk)
     end
   end
+  
+  def meta(path,&blk)
+    if blk
+      return Meta.new(path).transaction(&blk)
+    else
+      return Meta.new(path)
+    end
+  end
 end

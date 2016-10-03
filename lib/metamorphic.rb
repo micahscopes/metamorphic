@@ -7,14 +7,6 @@ require "metamorphic/morph"
 require "metamorphic/meta"
 
 module Metamorphic
-  def meta(path,&blk)
-    if blk
-      return Meta.new(path).transaction(&blk)
-    else
-      return Meta.new(path)
-    end
-  end
-
   YAMLFM = /\-\-\-(?:\n|\r|\s(.+))((?:.|\n|\r)*?)(?=(?:(?:\n|\r)\-\-\-(?:\n|\r|(.+))|\Z))/
 
   COCOON = FileList[]
@@ -63,8 +55,11 @@ module Metamorphic
 
   def self.included(base)
     # check for existing clobberable directories... and prepare to clobber them!
-    cocoon = FileList["#{@OUTPUT}/**/.cocoon"].pathmap("%d")
-    CLOBBER.include cocoon
+    Rake::Task.define_task :clobber_cocoons do
+      cocoon = FileList["**/.cocoon"].pathmap("%d")
+      CLOBBER.include cocoon
+    end
+    Rake::Task[:clobber].enhance [:clobber_cocoons]
   end
 end
 

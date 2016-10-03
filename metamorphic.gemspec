@@ -32,6 +32,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rspec"
   spec.add_development_dependency "stringex"
   spec.add_dependency "rake"
-  spec.add_dependency "knit"
-  # spec.add_dependency "mustache"
+  spec.add_dependency "knit", "~> 0.1"
 end

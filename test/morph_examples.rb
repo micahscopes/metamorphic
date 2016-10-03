@@ -37,18 +37,6 @@ RSpec.describe Metamorphic do
     expect( m.with ["duck","duck","grey duck"] ).to eq( ["duck","duck"] )
   end
 
-  example "cocoon from a file path" do
-    self.extend Rake::DSL
-
-    sh "rm -rf test/this"
-    @file = "test/this/is/a/test/file.txt"
-    cocoon(@file)
-    Rake::Task[:cocoon].invoke
-    expect(File.exist?(File.dirname(@file))).to be_truthy
-
-    Rake::Task[:clobber].invoke
-    expect(File.exist?(File.dirname(@file))).to be_falsy
-  end
 
   example "filter paths then transform pathnames" do
     self.extend Rake::DSL
