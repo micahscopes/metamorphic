@@ -34,21 +34,23 @@ module Metamorphic
   end
 
   DATAKEY = "content"
+
+  # A wrapper for YAML::Store.  Supports YAML front matter.
+  # Does caching based on file modification time.
   class YML < YAML::Store
     private
     def needs_refreshment
-       return @last_cache <= File.mtime(path) rescue true
+       return @cache_timestamp <= File.mtime(path) rescue true
     end
     def refresh
       if !File.exists? path
         @cache = {}
-        @cache_hash = nil
       end
       if needs_refreshment
         h = {}
         transaction(true){|d| roots.each{|k| h[k] = d[k]}}
         @cache = h
-        @last_cache = Time.new-1
+        @cache_timestamp = Time.new-1
         needed_refreshment = true
       end
       return needed_refreshment
@@ -62,7 +64,7 @@ module Metamorphic
 
     public
     def initialize(*args,&blk)
-      @last_cache = Time.new(0)
+      @cache_timestamp = Time.new(0)
       super
     end
 
@@ -76,9 +78,9 @@ module Metamorphic
       return @data
     end
 
-    def content=(str)
-
-    end
+    # def content=(str)
+    #
+    # end
 
     def transaction(readonly=false,data=nil,&blk)
       if File.exists?(path) && (!readonly || needs_refreshment)
@@ -135,22 +137,35 @@ module Metamorphic
     end
   end
 
+  # Delegator for a Metamorphic::YML store,
+  # providing a direct interface to an arbitrary branch
+  # of a data structure.
   class Meta < SimpleDelegator
     include Enumerable
     extend Forwardable
-    def_delegators :@yml, :path, :root_hash, :transaction, :content, :has_yaml_suffix
+    # @!method path
+    #   @see YML#path
+    # @!method transaction
+    #   @see YML#transaction
+    # @!method root_hash
+    #   @see YML#root_hash
+    # @!method root_hash
+    #   @see YML#content
+    # @!method has_yaml_suffix
+    #   @see YML#has_yaml_suffix
+    def_delegators :@yml, :path, :root_hash, :transaction, :content
 
     protected
+    def_delegators :@yml, :has_yaml_suffix
     attr_accessor :branch,:yml
     def self.about(source_path,kargs={})
       kargs = kargs.merge({:src => source_path})
       return Meta.new(kargs)
     end
-    public
     def __getobj__
       return @branch.inject(root_hash){|h,k| h[k]}
     end
-
+    public
     def initialize(pth=nil,kargs={})
       defaults = {:branch=>[],:data_key=>DATAKEY,:suffix=>".meta.yaml"}
 
@@ -212,7 +227,7 @@ module Metamorphic
 
       previous_hash = @last_hash
       src = meta(src)
-      self << src
+      self ** src
       if has_yaml_suffix
         # puts "putting data in yaml with key '#{data_key}'"
         self[data_key] = src.content
@@ -278,7 +293,7 @@ module Metamorphic
       return obj.each(*args,&blk)
     end
   end
-  
+
   def meta(path,&blk)
     if blk
       return Meta.new(path).transaction(&blk)
