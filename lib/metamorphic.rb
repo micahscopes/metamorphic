@@ -7,8 +7,6 @@ require "metamorphic/morph"
 require "metamorphic/meta"
 
 module Metamorphic
-  YAMLFM = /\-\-\-(?:\n|\r|\s(.+))((?:.|\n|\r)*?)(?=(?:(?:\n|\r)\-\-\-(?:\n|\r|(.+))|\Z))/
-
   COCOON = FileList[]
   def cocoon(path,&blk)
     task :cocoon
