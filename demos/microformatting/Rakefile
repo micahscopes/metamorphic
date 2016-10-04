@@ -3,10 +3,11 @@ require 'bundler'
 require 'rake/clean'
 Bundler.require
 
-pages = FileList["**/*.html"]
 meta_file = "metadata.yaml"
 file meta_file => ["Rakefile"] # rebuild if this file has changed
+CLOBBER.include meta_file
 
+pages = FileList["**/*.html"]
 pages.each do |src|
   html = Nokogiri.parse(File.read(src))
   file meta_file => src do
@@ -34,5 +35,3 @@ file meta_file do
 end
 
 task :default => [meta_file]
-
-CLOBBER.include meta_file

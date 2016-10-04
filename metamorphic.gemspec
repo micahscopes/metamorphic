@@ -9,8 +9,8 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Micah"]
   spec.email         = ["fitchmicah@gmail.com"]
 
-  spec.summary       = "Meta-morphosize human readable meta-data into wonderous creations."
-  spec.description   = "A collection of more and less functional tools for collecting and transforming metadata.  Designed to build static websites with Rake... useful for so much more!"
+  spec.summary       = "Meta-morphosize human readable meta-data into wonderous digital creations."
+  spec.description   = "Various tools for collecting, transforming and creating with metadata.  Designed to build static pages with Rake... useful for much more!"
   spec.homepage      = "http://github.com/micahscopes/metamorphic"
   spec.license       = "MIT"
 
