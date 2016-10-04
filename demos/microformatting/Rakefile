@@ -1,0 +1,38 @@
+require 'rubygems'
+require 'bundler'
+require 'rake/clean'
+Bundler.require
+
+pages = FileList["**/*.html"]
+meta_file = "metadata.yaml"
+file meta_file => ["Rakefile"] # rebuild if this file has changed
+
+pages.each do |src|
+  html = Nokogiri.parse(File.read(src))
+  file meta_file => src do
+    meta(meta_file).transaction do |m|
+      p = {}
+      p["title"] ||= html.css("h1").first.inner_text rescue nil
+      p["subtitle"] ||= html.css("h2").first.inner_text rescue nil
+      p["date"] ||= html.css("time").inner_text rescue nil
+      p["contributor"] ||= html.css("#author").inner_text rescue nil
+      p["content"] ||= html.css("main").inner_html rescue nil
+      p["tags"] ||= html.css("#tags li").map{|li| li.inner_text} rescue []
+
+      m["posts"] ||= {}
+      m["posts"][src] = p
+    end
+  end
+end
+
+file meta_file do
+  m = meta(meta_file)
+  tags = m["posts"].map{|k,v| v["tags"]}.flatten.compact rescue nil
+  contributors = m["posts"].map{|k,v| v["tags"]}.flatten.compact rescue nil
+  m["tags"] = tags.uniq
+  m["contributors"] = contributors.uniq
+end
+
+task :default => [meta_file]
+
+CLOBBER.include meta_file
