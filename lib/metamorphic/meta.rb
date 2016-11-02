@@ -211,12 +211,10 @@ module Metamorphic
       m.branch = []
       return m
     end
-    def clone
-      cl = Object.instance_method(:clone).bind(self)
-      new = cl.call
-      obj = __getobj__.clone rescue __getobj__
-      new.__setobj__(obj)
-      new
+    def initialize_clone(other)
+      # cl = Object.instance_method(:clone).bind(self)
+      obj = other.__getobj__.clone rescue other__getobj__
+      __setobj__(obj)
     end
     def scan(src=@src,data_key=@data_key)
       if src == nil || src == path
