@@ -1,4 +1,7 @@
 require "knit"
+# require "pry"
+# require "pry-remote"
+# require "pry-nav"
 
 module Metamorphic
   def parse_yaml_stream(str,lim=1)
@@ -270,6 +273,7 @@ module Metamorphic
         ary = ary.respond_to?(:push) ? ary : [ary]
         ascend[k]=ary.push(contents)
       else
+        # ::Kernel.binding.pry
         transaction(false) do |d|
           contents.each do |k,v|
             d[k] = v

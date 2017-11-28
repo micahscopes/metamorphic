@@ -31,6 +31,9 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rake", "~> 10.0"
   spec.add_development_dependency "rspec"
   spec.add_development_dependency "stringex"
+  spec.add_development_dependency "pry"
+  spec.add_development_dependency "pry-remote"
+  spec.add_development_dependency "pry-nav"
   spec.add_dependency "rake"
   spec.add_dependency "knit", "~> 0.1"
 end

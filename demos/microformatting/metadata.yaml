@@ -1,0 +1,67 @@
+---
+posts:
+  posts/poetry.html:
+    title: What do I think about poetry?
+    date: 12:59 AM.  October 4, 2016.
+    contributor: Micah
+    content: |
+      I considered writing a nice poem for this demo post. But I'm not in the
+      mood to just willy-nilly whip out some silly poem at the moment.
+      Maybe another time.
+    tags:
+    - prose
+    - thoughts
+  posts/snacks.html:
+    title: A fall snack
+    subtitle: Who doesn't like snacks?
+    date: October 4, 2016
+    contributor: Micah
+    content: |
+      It's time for a snack.  You may expect this post to contain a wealth of information
+      on healthy snack options.  Well, look no further than <em>apples and cheese.</em>
+
+      In case you didn't already know, apples and cheese go together very well.
+      It's something even many children are well aware of.
+
+      Never tried it?  Maybe you didn't know?  Don't worry, because it's never too late
+      to try something new.
+
+      It's been said that <em>you can't teach "an old dog new tricks"...</em>
+
+      But if you are trying to teach some old dog a new trick of eating a
+      quality treat, such as a slice of cheese, combined with a slice of autumn apple,
+      well then the old dog is going to catch on very quickly.
+
+      So really, that saying depends on what exactly the trick is that you're
+      trying to convey to the dog.
+    tags:
+    - recipes
+    - fall
+    - apples
+    - cheese
+    - dogs
+    - philosophy
+    - tips and tricks
+    - trick or treat?
+tags:
+- prose
+- thoughts
+- recipes
+- fall
+- apples
+- cheese
+- dogs
+- philosophy
+- tips and tricks
+- trick or treat?
+contributors:
+- prose
+- thoughts
+- recipes
+- fall
+- apples
+- cheese
+- dogs
+- philosophy
+- tips and tricks
+- trick or treat?
